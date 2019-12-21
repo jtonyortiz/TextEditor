@@ -1,0 +1,197 @@
+#
+# Author: 			James Anthony Ortiz
+# Project name: 	CTextEditor
+# Project began: 	12/21/2019
+# Current update: 	12/21/2019 
+# Project Version: 	1.0
+# File name: 		log.txt
+
+
+# Project Description: A full implementation of a text-editor
+# and text-processor written in C99 (1999)
+# for Linux distributions. 
+
+==================================================
+PHASE 1:
+
+CREATING THE INITIAL PROGRAM
+==================================================
+
+#Date: 12/21/2019
+- Created file called kilo.c
+- Used kilo.c with echo to test output
+- Did not need to install GCC as this comes with the 
+linux distribution. 
+- Created initial makefile for program
+
+
+makefile commands:
+- $(CC) is a variable that make expands to cc by default.
+-Wall stands for “all Warnings”, and gets the compiler to 
+warn you when it sees code in your program that might not technically be wrong, but 
+is considered bad or questionable usage of the C language, like using variables before initializing them.
+
+-Wextra and -pedantic turn on even more warnings. 
+For each step in this log, if the program compiles, it shouldn’t produce 
+any warnings except for “unused variable” warnings in some cases. 
+If you get any other warnings, check to make sure your code 
+exactly matches the code in that step.
+
+-std=c99 specifies the exact version of the C language standard we’re using,
+which is C99. C99 allows us to declare variables anywhere within a function, 
+whereas ANSI C requires all variables to be declared at the top of a function or block.
+
+
+First, attempt to read key processes from user:
+
+-------------------------------------------
+#include <unistd.h>
+int main()
+{
+	char c;
+	while(read(STDIN_FILENO, &c, 1) == 1);
+	return 0;
+}//end main
+
+--------------------------------------------
+
+*** read() & STDIN_FILENO 
+Both are from: <unistd.h>
+Whats occurring: We are asking read() to read 1 byte from the standard input into the variable c,
+and to keep doing it until there are no more bytes to read. read() returns the
+number of bytes that it read, and will return 0 when it reaches the end of a file.
+
+What happens when running this program:
+When running ./kilo, the terminal gets hooked up to standard input
+and the keyboard input gets read into the c variable.
+
+How to exit the above program:
+Use Ctrl-D to tell read() that it has reached the end of the file.
+Or, alternatively you can also press Ctrl-c.
+
+=================================================
+Phase 1 : Part 2
+
+ADDING A COMMAND TO QUIT ('q')
+=================================================
+
+
+Now we want to demonstrate how canonical mode functions, 
+we are able to do this by having the program itself exit when it reads 
+'q' as input from the user.
+
+-------------------------------------------------------
+#include <unistd.h>
+
+int main()
+{
+	char c;
+	while(read(STDIN_FILENO, &c, 1) == 1 && c != 'q');
+	return 0;
+}
+
+-------------------------------------------------------
+
+
+How to quit:
+To quit the program you will need to type a line of text that 
+includes a q in it, and then press enter. The program will quickly read the 
+line of text one character at a time until it reads the 'q' 
+as a single character. This will halt the while loop from continuing.
+
+===============================================
+Phase 1 : Part 3
+
+TURN OFF ECHOING
+===============================================
+
+The user is able to set a teriminal's attributes by 
+- Useing tcgetattr() to read current attributes into a struct
+- Modifying the struct by hand
+- Passing the struct to tcsetattr() to write 
+the terminal attributes back out.
+
+-----------------------------------------------------------
+#include <termios.h>
+#include <unistd.h>
+
+void enableRawMode()
+{
+	struct termios raw;
+	
+	tcgetattr(STDIN_FILENO, &raw);
+	
+	raw.c_lflag &= ~(ECHO);
+	
+	tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+
+} // end enableRawMode()
+
+
+
+int main()
+{
+	enableRawMode();
+	
+	char c;
+	while(read(STDIN_FILENO, &c, 1) == 1 && c != 'q');
+	return 0;
+}//end MAIN
+
+------------------------------------------------------------
+
+Functions:
+From <termios.h>
+stuct termios, tcgetattr(), tcsetattr(), ECHO, TCSAFLUSH
+
+
+
+The ECHO feature causes each key you type to be
+printed to the terminal, so you can see what 
+you’re typing. This is useful in canonical mode, 
+but really gets in the way when we are trying to 
+carefully render a user 
+interface in raw mode. So we turn it off.
+
+This program does the same thing as the one in the
+previous step, the only difference is that it is
+not printing out the characters as you are typing.
+
+This is similar to what occurs when you are entering
+a value wile using "sudo".
+
+Terminal attributes are read by termios struct and 
+tcgetattr(). After getting this value it is then later set
+by tcsetattr() and applied to the terminal program.
+
+The TCSAFLUSH argument specifies when to apply the actual change.
+In this case, it waits for all pending output to be written to 
+the terminal.
+
+The c_lflag field is for "local flags" (miscellaneous flags)
+Other flag fields include:
+- c_iflag: input flags
+- c_oflag: output flags 
+- c_cflag: control flags
+
+Echo
+Echo is a bitflag.
+In this case, it is defined as:
+00000000000000000000000000001000
+ 
+Useing the NOT bitwise operator on the value above we get:
+11111111111111111111111111110111
+
+We then use bitwise AND and this value forces the 4th bit
+in the flags field to become 0.
+
+==================================================
+PHASE 1 : PART 4
+
+DISABLE RAW MODE AT EXIT (To be continued....)
+==================================================
+
+
+
+
+
