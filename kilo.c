@@ -5,6 +5,12 @@
 //compile: make command at terminal (see makefile)
 //=======================================================
 
+
+#include <ctype.h>
+#include <stdio.h>
+
+
+
 //struct termios, tcgetattr()/setattr(), ECHO, TCSAFLUSH
 #include <termios.h> 
 #include <unistd.h>
@@ -59,7 +65,7 @@ void enableRawMode()
 
   //tcgetattr(STDIN_FILENO, &raw);
 
-  raw.c_lflag &= ~(ECHO);
+  raw.c_lflag &= ~(ECHO | ICANON); //Added (ECHO | ICANON)
 
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 
@@ -84,7 +90,17 @@ int main()
   //While there is no 'q' character on the line of text, continue reading
   //in characters from standard input.
 
-  while(read(STDIN_FILENO, &c, 1) == 1 && c != 'q');
+  while(read(STDIN_FILENO, &c, 1) == 1 && c != 'q')
+  {
+    if(iscntrl(c))
+    {
+      printf("%d\n", c);
+    }
+    else
+    {
+      printf("%d ('%c')\n", c, c);
+    }
+  }
  
   return 0;
 }//end main()
