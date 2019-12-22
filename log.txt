@@ -2,8 +2,8 @@
 # Author: 			James Anthony Ortiz
 # Project name: 	CTextEditor
 # Project began: 	12/21/2019
-# Current update: 	12/21/2019 
-# Project Version: 	1.0
+# Current update: 	12/22/2019 
+# Project Version: 	1.1
 # File name: 		log.txt
 
 
@@ -190,6 +190,253 @@ PHASE 1 : PART 4
 
 DISABLE RAW MODE AT EXIT (To be continued....)
 ==================================================
+
+In this section, we will restore the terminal's original
+attributes when the program exits.
+
+---------------------------------------------------
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+
+struct termios orig_termios;
+
+void disableRawMode()
+{
+	tcsetattr(STDIN_FILENO, TCSAFLUSH, $orig_termios);
+
+}//end disableRawMode()
+
+void enableRawMode()
+{
+	tcgetattr(STDIN_FILENO, $orig_termios);
+	atexit(disableRawMode);
+	
+	struct termios raw = orig_termios;
+	raw.c_lflag &= ~(ECHO);
+	
+	tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+
+}//end enableRawMode()
+
+int main()  {...}
+-----------------------------------------------------
+
+atexit() comes from <stdlib.h>
+We use this to register disableRawMode() to be 
+called automatically upon exiting the program (or exit()
+function.
+
+orig_termios
+We then stor the original terminal attributes in a 
+global variable, orig_termios. We then assign 
+the orig_termios struct to be the raw struct, so that
+a raw copy can be made before making changes.
+
+Notice that in this implementation, input is no longer
+fed into the shell when after the program ends.
+
+This is because TCSAFLUSH is being passed to tcsetattr()
+when the program exits. This discards any unread input 
+before applying the changes to the terminal.
+
+=============================================================
+PHASE 1: PART 5
+
+
+TURNING OFF CANONICAL MODE
+=============================================================
+
+ICANON Flag
+- There is an ICANON flag that allows us to turn off 
+canonical mode . This will alows the users to read input 
+byte by byte, instead of line-by-line.
+
+--------------------------------------------------------------
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+
+struct termios orig_termios;
+
+void disableRawMode() { .... }
+
+void enableRawMode() 
+{
+	tcgetattr(STDIN_FILENO, &orig_termios);
+	atexit(disableRawMode);
+	
+	struct termios raw = orig_termios;
+	raw.c_lflag &= ~(ECHO | ICANON);
+	
+	tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+int main() { ... }
+--------------------------------------------------------------
+
+
+ICANON comes from <termios.h>.
+Input flags (the ones in the c_iflags field will generally
+start with I like ICANON does. However, ICANON is not 
+an input flag, but actually a "local" flag in the c_lflag 
+field. 
+
+Now we have the program set in a way that allows us to quit as soon
+as we press 'q' on the keyboard.
+
+
+
+
+===============================================================
+PHASE 1 : PART 6
+
+
+DISPLAY KEYPRESSES
+===============================================================
+
+In order to get a better idea how input in raw mode works, 
+lets print out each byte that we read with read(). We will 
+print each character's numeric ASCII value, as well as the 
+character that it represents if it is a printable character.
+
+
+--------------------------------------------------------------
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+
+struct termios orig_termios;
+
+void disableRawMode() 	{...}
+void enableRawMode() 	{...}
+
+int main()
+{
+	enableRawMode();
+	char c;
+	while(read(STDIN_FILENO, &c, 1) == 1 && c != 'q')
+	{
+		if(iscntrl(c)) //tests whether if ctrl char:
+		{
+			printf("%d\n", c);
+		}
+		else //if not, disp. actual char and ASCII#
+		{
+			printf("%d ('%c')\n", c, c);
+		}
+	}
+	
+	return 0;
+}//end MAIN 
+
+--------------------------------------------------------------
+
+iscntrl()	 comes from <ctype.h>
+printf()	 comes from <stdio.h>
+
+*** iscntrl()
+iscntrl() tests whether a character is a control character.
+Control characters are non-printable characters that we don't want to 
+print to the screen. ASCII codes 0-31 are all control
+characters, and 127 is also a control character. All ASCII 
+codes 32-126 are all printable.
+
+*** printf()
+printf() can print multiple representations of a byte. 
+%d tells that a format of a byte is a decimal number 
+(it's ascii code) and %c tells it to write the byte directly,
+as a character. 
+
+While useing this useful program you may notice a 
+few interesting features:
+Arrow keys, Page Up, Page Down, Home, and End all input 
+3 or 4 bytes to the terminal: 27, '[', and then one or two 
+other characters. This is known as an escape sequence. 
+All escape sequences start with a 27 byte. Pressing Escape sends a 
+single 27 byte as input.
+Backspace is byte 127. Delete is a 4-byte escape sequence.
+Enter is byte 10, which is a newline 
+character, also known as '\n'.
+Ctrl-A is 1, Ctrl-B is 2, Ctrl-C is… oh, that terminates the 
+program, right. But the Ctrl key combinations that do work 
+seem to map the letters A–Z to the codes 1–26.
+
+Below is an example of s small trial:
+72 ('H')
+101 ('e')
+108 ('l')
+108 ('l')
+111 ('o')
+32 (' ')
+87 ('W')
+111 ('o')
+114 ('r')
+108 ('l')
+100 ('d')
+115 ('s')
+27
+91 ('[')
+65 ('A')
+27
+91 ('[')
+68 ('D')
+27
+91 ('[')
+67 ('C')
+32 (' ')
+97 ('a')
+115 ('s')
+100 ('d')
+65 ('A')
+73 ('I')
+32 (' ')
+97 ('a')
+109 ('m')
+32 (' ')
+97 ('a')
+32 (' ')
+83 ('S')
+111 ('o')
+102 ('f')
+116 ('t')
+119 ('w')
+97 ('a')
+114 ('r')
+101 ('e')
+32 (' ')
+68 ('D')
+101 ('e')
+118 ('v')
+101 ('e')
+108 ('l')
+111 ('o')
+112 ('p')
+101 ('e')
+114 ('r')
+
+
+===========================================================================
+
+PHASE 1 : PART 7
+
+TURNING OFF Ctrl-c and ctrl-z SIGNALS
+
+===========================================================================
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
