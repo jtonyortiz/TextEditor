@@ -1,9 +1,9 @@
 #
-# Author: 			James Anthony Ortiz
+# Author: 		James Anthony Ortiz
 # Project name: 	CTextEditor
 # Project began: 	12/21/2019
-# Current update: 	12/22/2019 
-# Project Version: 	1.1
+# Current update: 	01/02/2020 
+# Project Version: 	1.3
 # File name: 		log.txt
 
 
@@ -425,20 +425,511 @@ PHASE 1 : PART 7
 TURNING OFF Ctrl-c and ctrl-z SIGNALS
 
 ===========================================================================
+Ctrl-c sends a SIGINT signal to the curreent process which causes 
+it to terminate, and Ctrl-Z sends a SIGSTP signal to the current prcess 
+which causes it to suspend. 
+-------------------------------------------------------
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+
+struct termios orig_termios;
+
+void disableRawMode() {...}
+
+void enableRawMode()
+{
+	tcgetattr(STDIN_FILENO, &orig_termios);
+	atexit(disableRawMode);
+	
+	struct termios raw = orig_termios;
+	
+	raw.c_lflag &= ~(ECHO | ICANON | ISIG);
+	
+	tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+	
+	
+}
+
+int main() {...}
+--------------------------------------------------------
+ISIG comes from <termios.h>, like ICANON does, the only
+small difference between the two is that it isnt an 
+input flag.
+
+Now, Ctrl-c can read as a 3 byte and Ctrl-z can read as a 26 byte.
 
 
+==========================================================
+
+PHASE 1: PART 8
+
+DISABLE CTRL-S and CTRL-Q
+
+==========================================================
+
+Ctrl-s and Ctrl-q are mainly used for software flow control.
+Ctrl-s: helps stop data from being transmitted to the
+terminal until pressing Ctrl-q. The idea comes from 
+older development periods where engineers wanted to
+pause the transmission of data, to let external devices
+take control.
+
+---------------------------------------------------------
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+
+struct termios orig_termios;
+
+void disableRawMode() { ... }
+
+void enableRawMode() {
+  tcgetattr(STDIN_FILENO, &orig_termios);
+  atexit(disableRawMode);
+  struct termios raw = orig_termios;
+  raw.c_iflag &= ~(IXON);
+  raw.c_lflag &= ~(ECHO | ICANON | ISIG);
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+int main() { ... }
+---------------------------------------------------------
+
+IXON comes from <termios.h>. I stands for input flag
+and XON comes from the names of the two control 
+characters that Ctrl-s and Ctrl-Q produce. XOFF
+to pause transmission and XON to resume transmission
+of data.
+
+Now, Ctrl-s can read as 19 bytes whereas Ctrl-q can reads
+as 17 bytes.
 
 
+===========================================================
+PHASE 1: PART 9
+
+DISABLE CTRL-V
+
+==========================================================
+
+On some operating systems, when you type Ctrl-V the
+terminal waits for you to type another character value, 
+sending that character as a literal value. We can turn 
+off this feature with the IEXTEN flag.
+
+---------------------------------------------------------
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+struct termios orig_termios;
+void disableRawMode() { ... }
+void enableRawMode() {
+  tcgetattr(STDIN_FILENO, &orig_termios);
+  atexit(disableRawMode);
+  struct termios raw = orig_termios;
+  raw.c_iflag &= ~(IXON);
+  raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+int main() {...}
+---------------------------------------------------------
+
+IEXTEN comes from <termios.h>. This is another
+flags that begins with I but belongs in the c_lflag field.
 
 
+=========================================================
+
+PHASE 1: PART 10
+
+FIX CTRL-M
+
+=========================================================
+
+Running the program now and going through the alphabet
+while holding ctrl, you should now notice that we
+have every letter, except for m.Ctrl-M is weird: it’s being read as 10, when we expect it to be read as 13, 
+since it is the 13th letter of the alphabet, and Ctrl-J 
+already produces a 10. What else produces 10? The Enter 
+key does.
+
+It turns out that the terminal is helpfully 
+translating any carriage returns (13, '\r') 
+inputted by the user into newlines (10, '\n').
+ Let’s turn off this feature.
+ 
+ ------------------------------------------------------
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+struct termios orig_termios;
+void disableRawMode() { ...}
+void enableRawMode() {
+  tcgetattr(STDIN_FILENO, &orig_termios);
+  atexit(disableRawMode);
+  struct termios raw = orig_termios;
+  raw.c_iflag &= ~(ICRNL | IXON);
+  raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+int main() { ... }
+-------------------------------------------------------
+
+ICRNL comes from <termios.h>. The I stands for "input
+flag", CR stands for "carriage retrun" and NL for 
+"New Line"
+
+Now, Ctrl-M will be read as 13, and the Enter key 
+will aslpo be read as 13.
+
+=======================================================
+
+Phase 1 : Part 11
+
+TURN OFF ALL OUTPUT PROCESSING
+
+=======================================================
+
+We can see that the terminal does a similar translation
+on the output side. It translates each newline ("\n") we print into a 
+carriage return followed by a newline ("\r\n"). The terminal requires 
+both of these characters in order to start a new line of text. The 
+carriage return moves the cursor back to the beginning of the
+ current line, and the newline moves the cursor down a line, 
+ scrolling the screen if necessary. (These two distinct 
+ operations originated in the days of typewriters and teletypes.)
 
 
+We will turn off all output processing features by turning off 
+the OPOST flag. In practice, the "\n" to "\r\n" translation is likely the only output 
+processing feature turned on by default.
+
+-------------------------------------------------------
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+struct termios orig_termios;
+void disableRawMode() { ... }
+void enableRawMode() {
+  tcgetattr(STDIN_FILENO, &orig_termios);
+  atexit(disableRawMode);
+  struct termios raw = orig_termios;
+  raw.c_iflag &= ~(ICRNL | IXON);
+  raw.c_oflag &= ~(OPOST);
+  raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+int main() {...}
 
 
+-------------------------------------------------------
+
+OPOST belongs to <termios.h>. O means that it is an 
+output flag, and POST represents "post-processing
+of output".
+
+If you try running the program now, you will notice
+that the newline characters we're printing are only
+moving the cursor down, and to the left side of the screen
+.To fix that, we will then add a couple of carriage
+returns to the printf() statements.
+
+-------------------------------------------------------
+
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+struct termios orig_termios;
+void disableRawMode() { ... }
+void enableRawMode() { ... }
+int main() {
+  enableRawMode();
+  char c;
+  while (read(STDIN_FILENO, &c, 1) == 1 && c != 'q') {
+    if (iscntrl(c)) {
+      printf("%d\r\n", c);
+    } else {
+      printf("%d ('%c')\r\n", c, c);
+    }
+  }
+  return 0;
+}
 
 
+-------------------------------------------------------
+
+From now on we will have to write out the full "\r\n" 
+when we start a new line.
+
+=======================================================
+
+PHASE 1: Part 12
+MISCELLANEOUS FLAGS
+
+=======================================================
+
+Turning off a few more flags:
+
+-------------------------------------------------------
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+struct termios orig_termios;
+void disableRawMode() { ... }
+void enableRawMode() {
+  tcgetattr(STDIN_FILENO, &orig_termios);
+  atexit(disableRawMode);
+  struct termios raw = orig_termios;
+  raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+  raw.c_oflag &= ~(OPOST);
+  raw.c_cflag |= (CS8);
+  raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+int main() { ... }
+-------------------------------------------------------
+
+BRKINT, INPCK, ISTRIP, and CS8 all come from <termios.h>
+
+At one point switiching off these flags was considered
+be a step for enabling "raw mode".
+
+Descriptions of flags:
+BRKINT - when turned on, enables a break condition
+that will cause a SIGINT signal to be sent to the 
+program, like pressing Ctrl-C.
+INPCK - enables parity checking, which doesnt 
+apply to modern terminals.
+ISTRIP - Causes the 8th bit of each input byte 
+to be stripped, meaning it will be set to 0.
+CS8 - Not a flag, but a bitmask with multiple 
+bits, which are then set to bitwise-OR(|)
+operator unlike all of the flags we are turning off.
+This sets the character size to become 8 bits per byte.
+On Linux however, it is already set that way.
+
+=======================================================
+
+PHASE 1 : PART 13
+
+A TIMEOUT FOR READ()
+
+=======================================================
+
+Currently, read() will wait indefinitely for input from
+the keyboard before it returns. However what if we want
+to animate something on the screen while waiting for user 
+input?
+
+It is possible to set a timeout, that way read() returns 
+if it doesn't get any input for a certain amount of time.
+
+--------------------------------------------------------
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+struct termios orig_termios;
+void disableRawMode() {...}
+void enableRawMode() {
+  tcgetattr(STDIN_FILENO, &orig_termios);
+  atexit(disableRawMode);
+  struct termios raw = orig_termios;
+  raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+  raw.c_oflag &= ~(OPOST);
+  raw.c_cflag |= (CS8);
+  raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+  raw.c_cc[VMIN] = 0;
+  raw.c_cc[VTIME] = 1;
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+int main() {
+  enableRawMode();
+  while (1) {
+    char c = '\0';
+    read(STDIN_FILENO, &c, 1);
+    if (iscntrl(c)) {
+      printf("%d\r\n", c);
+    } else {
+      printf("%d ('%c')\r\n", c, c);
+    }
+    if (c == 'q') break;
+  }
+  return 0;
+}
+
+--------------------------------------------------------
+
+VMIN & VTIME come from <termios.h>
+These are both indexes for the c_cc field (control
+characters)
+
+VMIN - Sets the minimum number of bytes needed
+before reach() can return.
+VTIME - Sets the maximum amount of ttime to wait before 
+read() returns.
+
+If read times out, it will return 0, which makes sense
+since it is the usual return value (number of bytes read).
+
+While running the program you can see how often read()
+tends to time out. If you dont supply input on time,
+it will keep returning and and displaying 0.
+
+=========================================================
+
+PHASE 1 : Part 14
+ERROR HANDLING 
+
+=========================================================
+
+Now that we have that set up, enableRawMode() will now
+have use all set up to be completely into "raw mode".
+
+Now we will add some error handling. First we will include
+a die() funtion to the soruce code that prints and 
+displays an error message and then exits the program.
+
+---------------------------------------------------------
+
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+struct termios orig_termios;
+void die(const char *s) {
+  perror(s);
+  exit(1);
+}
+void disableRawMode() {...}
+void enableRawMode() {...}
+int main() {...}
+---------------------------------------------------------
+
+perror() is a function that comes from <stdio.h>
+exit() comes from <stdlib.h>
+
+Most C library functions that fail, set the global errno
+variable to indicate what the error was. perror() looks
+for the global errno variable and then prints a 
+descriptive error message for it. It also displays the 
+string given before it prints the error, which provide 
+information about which part of the code caused the error.
 
 
+Lets now check library calls and then call die if they 
+fail to work.
 
+---------------------------------------------------------
 
+#include <ctype.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+struct termios orig_termios;
+void die(const char *s) {...}
+void disableRawMode() {
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1)
+    die("tcsetattr");
+}
+void enableRawMode() {
+  if (tcgetattr(STDIN_FILENO, &orig_termios) == -1) die("tcgetattr");
+  atexit(disableRawMode);
+  struct termios raw = orig_termios;
+  raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+  raw.c_oflag &= ~(OPOST);
+  raw.c_cflag |= (CS8);
+  raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+  raw.c_cc[VMIN] = 0;
+  raw.c_cc[VTIME] = 1;
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
+}
+int main() {
+  enableRawMode();
+  while (1) {
+    char c = '\0';
+    if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) die("read");
+    if (iscntrl(c)) {
+      printf("%d\r\n", c);
+    } else {
+      printf("%d ('%c')\r\n", c, c);
+    }
+    if (c == 'q') break;
+  }
+  return 0;
+}
+
+---------------------------------------------------------
+
+errno and EAGAIN come from <errno.h>
+
+tcsetattr(), tcgetattr() and read() will all return -1
+on failure, and set the errno value in order to inicate
+the error.
+
+An easy way to make tcgetattr() fail is to give the
+program a text file or a pipe as standard input
+instead of your terminal. To give it a pipe, run
+echo test | ./kilo . Both will yield the same error
+from tcgetattr().
+
+=========================================================
+
+PHASE 1 : PART 15 
+SLIPTTING CODE INTO SECTIONS
+
+=========================================================
+
+This concludes phase 1 on entering raw mode. Now, we will
+split the code into sections. 
+
+---------------------------------------------------------
+/*** includes ***/
+
+#include <ctype.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
+#include <unistd.h>
+
+/*** data ***/
+struct termios orig_termios;
+/*** terminal ***/
+void die(const char *s) {...}
+void disableRawMode() {...}
+void enableRawMode() {...}
+
+/*** init ***/
+
+int main() {...}
+
+----------------------------------------------------------
+
+=========================================================
+
+PHASE 2 : LOW-LEVEL TERMINAL INPUT / OUTPUT HANDLING
+Started: 01/02/2020
+
+=========================================================
 
